@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">Sales Managment</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="nav_sales">Sales</string>
+    <string name="nav_inventory">Inventory</string>
+    <string name="nav_customers">Customers</string>
+    <string name="nav_reports">Reports</string>
+    <string name="tagline">Reliable.Managable.Flexible</string>
+    <string name="dont_have_account">Don\'t have an account? Sign Up</string>
+    <string name="sign_up">Sign Up</string>
+    <string name="sign_in_with_link">Sign In with Email Link</string>
+</resources>
