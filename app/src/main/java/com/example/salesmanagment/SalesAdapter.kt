@@ -7,8 +7,10 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import java.util.Locale
 
-class SalesAdapter(private var sales: List<Sale>) :
-    RecyclerView.Adapter<SalesAdapter.SaleViewHolder>() {
+class SalesAdapter(
+    private var sales: List<Sale>,
+    private val onItemClick: (Sale) -> Unit = {}
+) : RecyclerView.Adapter<SalesAdapter.SaleViewHolder>() {
 
     fun updateList(newList: List<Sale>) {
         sales = newList
@@ -23,7 +25,7 @@ class SalesAdapter(private var sales: List<Sale>) :
 
     override fun onBindViewHolder(holder: SaleViewHolder, position: Int) {
         val sale = sales[position]
-        holder.bind(sale)
+        holder.bind(sale, onItemClick)
     }
 
     override fun getItemCount(): Int = sales.size
@@ -32,13 +34,17 @@ class SalesAdapter(private var sales: List<Sale>) :
         private val tvProductName: TextView = itemView.findViewById(R.id.tvSaleProductName)
         private val tvDetails: TextView = itemView.findViewById(R.id.tvSaleDetails)
         private val tvCustomer: TextView = itemView.findViewById(R.id.tvSaleCustomer)
+        private val tvPaymentMode: TextView = itemView.findViewById(R.id.tvSalePaymentMode)
         private val tvTotal: TextView = itemView.findViewById(R.id.tvSaleTotal)
 
-        fun bind(sale: Sale) {
+        fun bind(sale: Sale, onItemClick: (Sale) -> Unit) {
             tvProductName.text = sale.productName
             tvDetails.text = String.format(Locale.getDefault(), "%.0f x $ %.2f", sale.quantity, sale.unitPrice)
             tvCustomer.text = if (sale.customerName.isNullOrEmpty()) "Walk-in Customer" else "Customer: ${sale.customerName}"
+            tvPaymentMode.text = "Mode: ${sale.paymentMode ?: "Not specified"}"
             tvTotal.text = String.format(Locale.getDefault(), "$ %.2f", sale.totalAmount)
+
+            itemView.setOnClickListener { onItemClick(sale) }
         }
     }
 }

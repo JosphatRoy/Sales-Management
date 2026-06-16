@@ -35,6 +35,8 @@ class Dashboardscreen : AppCompatActivity() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
         val navRail = findViewById<NavigationRailView>(R.id.navigation_rail)
 
+        setupAdaptiveNavigation(bottomNav, navRail)
+
         // 2. Set Click Listeners for Cards
         cardSales.setOnClickListener { navigateTo(Transactionscreen::class.java) }
         cardInventory.setOnClickListener { navigateTo(InventoryActivity::class.java) }
@@ -42,6 +44,26 @@ class Dashboardscreen : AppCompatActivity() {
         cardReports.setOnClickListener { navigateTo(ReportsActivity::class.java) }
 
         // 3. Handle Navigation "Tabs" (Responsive)
+        bottomNav?.setOnItemSelectedListener { item -> handleNavigation(item.itemId) }
+        navRail?.setOnItemSelectedListener { item -> handleNavigation(item.itemId) }
+    }
+
+    private fun setupAdaptiveNavigation(bottomNav: BottomNavigationView?, navRail: NavigationRailView?) {
+        val isWide = resources.configuration.screenWidthDp >= 600
+        val navGuideline = findViewById<androidx.constraintlayout.widget.Guideline>(R.id.nav_guideline)
+
+        if (isWide) {
+            navRail?.visibility = android.view.View.VISIBLE
+            bottomNav?.visibility = android.view.View.GONE
+            // Typical Nav Rail width is 80dp
+            val railWidth = (80 * resources.displayMetrics.density).toInt()
+            navGuideline?.setGuidelineBegin(railWidth)
+        } else {
+            navRail?.visibility = android.view.View.GONE
+            bottomNav?.visibility = android.view.View.VISIBLE
+            navGuideline?.setGuidelineBegin(0)
+        }
+
         bottomNav?.setOnItemSelectedListener { item -> handleNavigation(item.itemId) }
         navRail?.setOnItemSelectedListener { item -> handleNavigation(item.itemId) }
     }

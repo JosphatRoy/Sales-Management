@@ -9,5 +9,6 @@ data class Sale(
     val unitPrice: Double,
     val totalAmount: Double,
     val customerName: String?,
+    val paymentMode: String? = null,
     val timestamp: Date = Date()
 )

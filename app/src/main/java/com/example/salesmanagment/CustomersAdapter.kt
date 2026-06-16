@@ -7,8 +7,10 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import java.util.Locale
 
-class CustomersAdapter(private var customers: List<Customer>) :
-    RecyclerView.Adapter<CustomersAdapter.CustomerViewHolder>() {
+class CustomersAdapter(
+    private var customers: List<Customer>,
+    private val onItemClick: (Customer) -> Unit
+) : RecyclerView.Adapter<CustomersAdapter.CustomerViewHolder>() {
 
     fun updateList(newList: List<Customer>) {
         customers = newList
@@ -23,7 +25,7 @@ class CustomersAdapter(private var customers: List<Customer>) :
 
     override fun onBindViewHolder(holder: CustomerViewHolder, position: Int) {
         val customer = customers[position]
-        holder.bind(customer)
+        holder.bind(customer, onItemClick)
     }
 
     override fun getItemCount(): Int = customers.size
@@ -34,11 +36,15 @@ class CustomersAdapter(private var customers: List<Customer>) :
         private val tvEmail: TextView = itemView.findViewById(R.id.tvCustomerEmail)
         private val tvTotal: TextView = itemView.findViewById(R.id.tvTotalPurchases)
 
-        fun bind(customer: Customer) {
+        fun bind(customer: Customer, onItemClick: (Customer) -> Unit) {
             tvName.text = customer.name
             tvPhone.text = customer.phone
             tvEmail.text = customer.email
             tvTotal.text = String.format(Locale.getDefault(), "$ %.2f", customer.totalPurchases)
+
+            itemView.setOnClickListener {
+                onItemClick(customer)
+            }
         }
     }
 }

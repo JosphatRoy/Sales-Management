@@ -16,11 +16,19 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.navigationrail.NavigationRailView
 import android.content.Intent
+import android.view.LayoutInflater
+import androidx.appcompat.app.AlertDialog
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 class InventoryActivity : AppCompatActivity() {
 
     private lateinit var adapter: InventoryAdapter
     private val allProducts = mutableListOf<Product>()
+    private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,8 +47,117 @@ class InventoryActivity : AppCompatActivity() {
         setupAddButton()
         setupNavigation()
 
-        // Load mock data
-        loadMockProducts()
+        // Sync data with Firebase
+        syncWithFirebase()
+    }
+
+    private fun syncWithFirebase() {
+        val currentUser = auth.currentUser
+        if (currentUser == null) {
+            Toast.makeText(this, "Not logged in. Using local data.", Toast.LENGTH_SHORT).show()
+            loadLocalProducts()
+            return
+        }
+
+        // 1. Check if we have local data to migrate
+        val prefs = getSharedPreferences("sales_prefs", MODE_PRIVATE)
+        val json = prefs.getString("products_list", null)
+        
+        if (json != null) {
+            // Local data exists, migrate it to Firestore if Firestore is empty for this user
+            val type = object : TypeToken<List<Product>>() {}.type
+            val localList: List<Product> = Gson().fromJson(json, type)
+            
+            db.collection("users").document(currentUser.uid).collection("products")
+                .get()
+                .addOnSuccessListener { documents ->
+                    if (documents.isEmpty) {
+                        // Migrate local to remote
+                        migrateToFirestore(currentUser.uid, localList)
+                    } else {
+                        // Remote data exists, load it
+                        loadFromFirestore(currentUser.uid)
+                        // Clear local cache to prevent future migration conflicts
+                        prefs.edit().remove("products_list").apply()
+                    }
+                }
+        } else {
+            // No local data, just load from Firestore
+            loadFromFirestore(currentUser.uid)
+        }
+    }
+
+    private fun migrateToFirestore(userId: String, products: List<Product>) {
+        val batch = db.batch()
+        products.forEach { product ->
+            val docRef = db.collection("users").document(userId).collection("products").document(product.id)
+            batch.set(docRef, product)
+        }
+        batch.commit().addOnSuccessListener {
+            Toast.makeText(this, "Data migrated to cloud", Toast.LENGTH_SHORT).show()
+            getSharedPreferences("sales_prefs", MODE_PRIVATE).edit().remove("products_list").apply()
+            loadFromFirestore(userId)
+        }
+    }
+
+    private fun loadFromFirestore(userId: String) {
+        db.collection("users").document(userId).collection("products")
+            .get()
+            .addOnSuccessListener { result ->
+                val list = result.toObjects(Product::class.java)
+                allProducts.clear()
+                allProducts.addAll(list)
+                adapter.updateList(allProducts)
+                if (allProducts.isEmpty()) {
+                    loadMockProducts()
+                }
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "Error loading cloud data", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun saveProducts(product: Product) {
+        val currentUser = auth.currentUser
+        if (currentUser != null) {
+            db.collection("users").document(currentUser.uid).collection("products")
+                .document(product.id)
+                .set(product)
+                .addOnFailureListener {
+                    Toast.makeText(this, "Failed to sync with cloud", Toast.LENGTH_SHORT).show()
+                }
+        }
+        
+        // Also keep local backup for offline access (optional but good practice)
+        val prefs = getSharedPreferences("sales_prefs", MODE_PRIVATE)
+        val json = Gson().toJson(allProducts)
+        prefs.edit().putString("products_list", json).apply()
+    }
+
+    private fun deleteProduct(product: Product) {
+        val currentUser = auth.currentUser
+        if (currentUser != null) {
+            db.collection("users").document(currentUser.uid).collection("products")
+                .document(product.id)
+                .delete()
+        }
+        allProducts.remove(product)
+        adapter.updateList(allProducts)
+        // Update local backup
+        val json = Gson().toJson(allProducts)
+        getSharedPreferences("sales_prefs", MODE_PRIVATE).edit().putString("products_list", json).apply()
+    }
+
+    private fun loadLocalProducts() {
+        val prefs = getSharedPreferences("sales_prefs", MODE_PRIVATE)
+        val json = prefs.getString("products_list", null)
+        if (json != null) {
+            val type = object : TypeToken<List<Product>>() {}.type
+            val list: List<Product> = Gson().fromJson(json, type)
+            allProducts.clear()
+            allProducts.addAll(list)
+            adapter.updateList(allProducts)
+        }
     }
 
     private fun setupNavigation() {
@@ -84,8 +201,48 @@ class InventoryActivity : AppCompatActivity() {
         val columns = resources.getInteger(R.integer.dashboard_columns)
         rv.layoutManager = GridLayoutManager(this, columns)
         
-        adapter = InventoryAdapter(allProducts)
+        adapter = InventoryAdapter(allProducts) { product ->
+            showEditProductDialog(product)
+        }
         rv.adapter = adapter
+    }
+
+    private fun showEditProductDialog(product: Product) {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_inventory, null)
+        val etName = dialogView.findViewById<TextInputEditText>(R.id.etProductName)
+        val etCategory = dialogView.findViewById<TextInputEditText>(R.id.etCategory)
+        val etPrice = dialogView.findViewById<TextInputEditText>(R.id.etPrice)
+        val etStock = dialogView.findViewById<TextInputEditText>(R.id.etStock)
+
+        etName.setText(product.name)
+        etCategory.setText(product.category)
+        etPrice.setText(product.price.toString())
+        etStock.setText(product.stock.toString())
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Edit Product")
+            .setView(dialogView)
+            .setPositiveButton("Update") { _, _ ->
+                val index = allProducts.indexOf(product)
+                if (index != -1) {
+                    val updatedProduct = product.copy(
+                        name = etName.text.toString(),
+                        category = etCategory.text.toString(),
+                        price = etPrice.text.toString().toDoubleOrNull() ?: 0.0,
+                        stock = etStock.text.toString().toIntOrNull() ?: 0
+                    )
+                    allProducts[index] = updatedProduct
+                    adapter.updateList(allProducts)
+                    saveProducts(updatedProduct)
+                    Toast.makeText(this, "Product updated", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Delete") { _, _ ->
+                deleteProduct(product)
+                Toast.makeText(this, "Product deleted", Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton("Cancel", null)
+            .show()
     }
 
     private fun setupSearch() {
@@ -109,8 +266,43 @@ class InventoryActivity : AppCompatActivity() {
 
     private fun setupAddButton() {
         findViewById<FloatingActionButton>(R.id.fabAddProduct).setOnClickListener {
-            Toast.makeText(this, "Add Product Clicked", Toast.LENGTH_SHORT).show()
+            showAddProductDialog()
         }
+    }
+
+    private fun showAddProductDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_inventory, null)
+        val etName = dialogView.findViewById<TextInputEditText>(R.id.etProductName)
+        val etCategory = dialogView.findViewById<TextInputEditText>(R.id.etCategory)
+        val etPrice = dialogView.findViewById<TextInputEditText>(R.id.etPrice)
+        val etStock = dialogView.findViewById<TextInputEditText>(R.id.etStock)
+
+        AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setPositiveButton("Add") { _, _ ->
+                val name = etName.text.toString()
+                val category = etCategory.text.toString()
+                val priceStr = etPrice.text.toString()
+                val stockStr = etStock.text.toString()
+
+                if (name.isNotEmpty() && category.isNotEmpty() && priceStr.isNotEmpty() && stockStr.isNotEmpty()) {
+                    val newProduct = Product(
+                        id = System.currentTimeMillis().toString(),
+                        name = name,
+                        category = category,
+                        price = priceStr.toDoubleOrNull() ?: 0.0,
+                        stock = stockStr.toIntOrNull() ?: 0
+                    )
+                    allProducts.add(0, newProduct) // Add to top
+                    adapter.updateList(allProducts)
+                    saveProducts(newProduct)
+                    Toast.makeText(this, "Product added successfully", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "Please fill all fields", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun loadMockProducts() {

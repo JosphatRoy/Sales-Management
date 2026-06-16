@@ -2,8 +2,11 @@ package com.example.salesmanagment
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -12,7 +15,11 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.navigationrail.NavigationRailView
+import com.google.android.material.textfield.TextInputEditText
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 class ReportsActivity : AppCompatActivity() {
 
@@ -36,32 +43,39 @@ class ReportsActivity : AppCompatActivity() {
 
         setupNavigation()
         setupTopProductsList()
+        setupAddReportButton()
         
-        // Mock data for report
         loadReportData()
+        if (topProducts.isEmpty()) {
+            loadMockReportData()
+        }
     }
 
-    private fun setupTopProductsList() {
-        val rv = findViewById<RecyclerView>(R.id.rvTopProducts)
-        
-        // Use 2 columns for the top products on tablets too if it makes sense
-        val columns = resources.getInteger(R.integer.dashboard_columns)
-        rv.layoutManager = if (columns > 2) GridLayoutManager(this, 2) else LinearLayoutManager(this)
-        
-        topProductsAdapter = InventoryAdapter(topProducts)
-        rv.adapter = topProductsAdapter
+    private fun saveReportProducts() {
+        val prefs = getSharedPreferences("sales_prefs", MODE_PRIVATE)
+        val json = Gson().toJson(topProducts)
+        prefs.edit().putString("report_products_list", json).apply()
     }
 
     private fun loadReportData() {
-        // Sales Summary
+        // Sales Summary (Static for now)
         findViewById<TextView>(R.id.tvTotalRevenue).text = "$ 12,450.00"
         findViewById<TextView>(R.id.tvTotalTransactions).text = "156 Transactions"
-        
-        // Inventory Summary
         findViewById<TextView>(R.id.tvInventoryValue).text = "$ 45,200.00"
         findViewById<TextView>(R.id.tvLowStockCount).text = "5 Low Stock Items"
 
-        // Mocking top selling items
+        val prefs = getSharedPreferences("sales_prefs", MODE_PRIVATE)
+        val json = prefs.getString("report_products_list", null)
+        if (json != null) {
+            val type = object : TypeToken<List<Product>>() {}.type
+            val list: List<Product> = Gson().fromJson(json, type)
+            topProducts.clear()
+            topProducts.addAll(list)
+            topProductsAdapter.updateList(topProducts)
+        }
+    }
+
+    private fun loadMockReportData() {
         topProducts.addAll(listOf(
             Product("1", "Sugar", "Groceries", 2.50, 450),
             Product("5", "Rice", "Groceries", 10.00, 320),
@@ -69,6 +83,80 @@ class ReportsActivity : AppCompatActivity() {
             Product("4", "Eggs", "Dairy", 3.00, 150)
         ))
         topProductsAdapter.updateList(topProducts)
+        saveReportProducts()
+    }
+
+    private fun setupAddReportButton() {
+        findViewById<FloatingActionButton>(R.id.fabAddReport).setOnClickListener {
+            showAddReportDialog()
+        }
+    }
+
+    private fun showAddReportDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_inventory, null)
+        val etName = dialogView.findViewById<TextInputEditText>(R.id.etProductName)
+        
+        AlertDialog.Builder(this)
+            .setTitle("Add to Top Products")
+            .setView(dialogView)
+            .setPositiveButton("Add") { _, _ ->
+                val name = etName.text.toString()
+                if (name.isNotEmpty()) {
+                    topProducts.add(0, Product(System.currentTimeMillis().toString(), name, "Reported", 0.0, 0))
+                    topProductsAdapter.updateList(topProducts)
+                    saveReportProducts()
+                    Toast.makeText(this, "Report item added", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun setupTopProductsList() {
+        val rv = findViewById<RecyclerView>(R.id.rvTopProducts)
+        val columns = resources.getInteger(R.integer.dashboard_columns)
+        rv.layoutManager = if (columns > 2) GridLayoutManager(this, 2) else LinearLayoutManager(this)
+        
+        topProductsAdapter = InventoryAdapter(topProducts) { product ->
+            showEditProductDialog(product)
+        }
+        rv.adapter = topProductsAdapter
+    }
+
+    private fun showEditProductDialog(product: Product) {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_inventory, null)
+        val etName = dialogView.findViewById<TextInputEditText>(R.id.etProductName)
+        val etCategory = dialogView.findViewById<TextInputEditText>(R.id.etCategory)
+        val etPrice = dialogView.findViewById<TextInputEditText>(R.id.etPrice)
+        val etStock = dialogView.findViewById<TextInputEditText>(R.id.etStock)
+
+        etName.setText(product.name)
+        etCategory.setText(product.category)
+        etPrice.setText(product.price.toString())
+        etStock.setText(product.stock.toString())
+
+        AlertDialog.Builder(this)
+            .setTitle("Edit Product")
+            .setView(dialogView)
+            .setPositiveButton("Update") { _, _ ->
+                val index = topProducts.indexOf(product)
+                if (index != -1) {
+                    topProducts[index] = product.copy(
+                        name = etName.text.toString(),
+                        category = etCategory.text.toString(),
+                        price = etPrice.text.toString().toDoubleOrNull() ?: 0.0,
+                        stock = etStock.text.toString().toIntOrNull() ?: 0
+                    )
+                    topProductsAdapter.updateList(topProducts)
+                    saveReportProducts()
+                }
+            }
+            .setNeutralButton("Delete") { _, _ ->
+                topProducts.remove(product)
+                topProductsAdapter.updateList(topProducts)
+                saveReportProducts()
+            }
+            .show()
     }
 
     private fun setupNavigation() {

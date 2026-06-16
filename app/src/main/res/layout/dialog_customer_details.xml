@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@color/black">
+
+    <TextView
+        android:id="@+id/tvDetName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Customer Name"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/tvDetPhone"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="+254 700 000 000"
+        android:textSize="18sp"
+        android:textColor="@color/white"
+        android:alpha="0.8"
+        android:layout_marginBottom="4dp"/>
+
+    <TextView
+        android:id="@+id/tvDetEmail"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="customer@email.com"
+        android:textSize="18sp"
+        android:textColor="@color/white"
+        android:alpha="0.8"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:id="@+id/tvDetTotal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Total Purchases: $0.00"
+        android:textSize="16sp"
+        android:textColor="?attr/colorPrimary"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp"/>
+
+    <LinearLayout
+        style="?android:attr/buttonBarStyle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnCall"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Call"/>
+
+        <Button
+            android:id="@+id/btnEmail"
+            style="?android:attr/buttonBarButtonStyle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Email"/>
+    </LinearLayout>
+
+</LinearLayout>

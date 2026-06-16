@@ -8,8 +8,10 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import java.util.Locale
 
-class InventoryAdapter(private var products: List<Product>) :
-    RecyclerView.Adapter<InventoryAdapter.ProductViewHolder>() {
+class InventoryAdapter(
+    private var products: List<Product>,
+    private val onItemClick: (Product) -> Unit = {}
+) : RecyclerView.Adapter<InventoryAdapter.ProductViewHolder>() {
 
     fun updateList(newList: List<Product>) {
         products = newList
@@ -24,7 +26,7 @@ class InventoryAdapter(private var products: List<Product>) :
 
     override fun onBindViewHolder(holder: ProductViewHolder, position: Int) {
         val product = products[position]
-        holder.bind(product)
+        holder.bind(product, onItemClick)
     }
 
     override fun getItemCount(): Int = products.size
@@ -36,7 +38,7 @@ class InventoryAdapter(private var products: List<Product>) :
         private val tvStock: TextView = itemView.findViewById(R.id.tvStockLevel)
         private val stockIndicator: View = itemView.findViewById(R.id.stockIndicator)
 
-        fun bind(product: Product) {
+        fun bind(product: Product, onItemClick: (Product) -> Unit) {
             tvName.text = product.name
             tvCategory.text = product.category
             tvPrice.text = String.format(Locale.getDefault(), "$ %.2f", product.price)
@@ -48,6 +50,10 @@ class InventoryAdapter(private var products: List<Product>) :
                 else -> Color.GREEN
             }
             stockIndicator.setBackgroundColor(color)
+
+            itemView.setOnClickListener {
+                onItemClick(product)
+            }
         }
     }
 }
