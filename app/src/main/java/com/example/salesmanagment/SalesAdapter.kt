@@ -39,10 +39,10 @@ class SalesAdapter(
 
         fun bind(sale: Sale, onItemClick: (Sale) -> Unit) {
             tvProductName.text = sale.productName
-            tvDetails.text = String.format(Locale.getDefault(), "%.0f x $ %.2f", sale.quantity, sale.unitPrice)
+            tvDetails.text = String.format(Locale.getDefault(), "%.0f x Ksh %.2f", sale.quantity, sale.unitPrice)
             tvCustomer.text = if (sale.customerName.isNullOrEmpty()) "Walk-in Customer" else "Customer: ${sale.customerName}"
             tvPaymentMode.text = "Mode: ${sale.paymentMode ?: "Not specified"}"
-            tvTotal.text = String.format(Locale.getDefault(), "$ %.2f", sale.totalAmount)
+            tvTotal.text = String.format(Locale.getDefault(), "Ksh %.2f", sale.totalAmount)
 
             itemView.setOnClickListener { onItemClick(sale) }
         }

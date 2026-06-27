@@ -20,11 +20,16 @@ import com.google.android.material.navigationrail.NavigationRailView
 import com.google.android.material.textfield.TextInputEditText
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import java.util.Locale
 
 class ReportsActivity : AppCompatActivity() {
 
     private lateinit var topProductsAdapter: InventoryAdapter
     private val topProducts = mutableListOf<Product>()
+    private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,10 +50,75 @@ class ReportsActivity : AppCompatActivity() {
         setupTopProductsList()
         setupAddReportButton()
         
-        loadReportData()
-        if (topProducts.isEmpty()) {
-            loadMockReportData()
+        syncWithFirebase()
+    }
+
+    private fun syncWithFirebase() {
+        val currentUser = auth.currentUser
+        if (currentUser == null) {
+            loadReportData() // Load static/local
+            if (topProducts.isEmpty()) loadMockReportData()
+            return
         }
+
+        // Fetch sales for summary with real-time/offline support
+        db.collection("users").document(currentUser.uid).collection("sales")
+            .addSnapshotListener { snapshots, e ->
+                if (snapshots != null) {
+                    val sales = snapshots.toObjects(Sale::class.java)
+                    updateSummary(sales)
+                }
+            }
+
+        // Fetch top products
+        db.collection("users").document(currentUser.uid).collection("top_products")
+            .addSnapshotListener { snapshots, e ->
+                if (snapshots != null) {
+                    val list = snapshots.toObjects(Product::class.java)
+                    topProducts.clear()
+                    topProducts.addAll(list)
+                    topProductsAdapter.updateList(topProducts)
+                    if (topProducts.isEmpty() && snapshots.metadata.isFromCache.not()) {
+                        loadMockReportData()
+                    }
+                }
+            }
+    }
+
+    private fun updateSummary(sales: List<Sale>) {
+        val totalRevenue = sales.sumOf { it.totalAmount }
+        val transactionCount = sales.size
+        
+        findViewById<TextView>(R.id.tvTotalRevenue).text = String.format(Locale.getDefault(), "Ksh %.2f", totalRevenue)
+        findViewById<TextView>(R.id.tvTotalTransactions).text = "$transactionCount Transactions"
+        
+        // Inventory value could be fetched similarly from "products"
+        val currentUser = auth.currentUser ?: return
+        db.collection("users").document(currentUser.uid).collection("products")
+            .addSnapshotListener { snapshots, e ->
+                if (snapshots != null) {
+                    val products = snapshots.toObjects(Product::class.java)
+                    val totalValue = products.sumOf { it.price * it.stock }
+                    val lowStock = products.count { it.stock < 10 }
+                    
+                    findViewById<TextView>(R.id.tvInventoryValue).text = String.format(Locale.getDefault(), "Ksh %.2f", totalValue)
+                    findViewById<TextView>(R.id.tvLowStockCount).text = "$lowStock Low Stock Items"
+                }
+            }
+    }
+
+    private fun saveReportProductToFirestore(product: Product) {
+        val currentUser = auth.currentUser ?: return
+        db.collection("users").document(currentUser.uid).collection("top_products")
+            .document(product.id)
+            .set(product)
+    }
+
+    private fun deleteReportProductFromFirestore(productId: String) {
+        val currentUser = auth.currentUser ?: return
+        db.collection("users").document(currentUser.uid).collection("top_products")
+            .document(productId)
+            .delete()
     }
 
     private fun saveReportProducts() {
@@ -58,11 +128,11 @@ class ReportsActivity : AppCompatActivity() {
     }
 
     private fun loadReportData() {
-        // Sales Summary (Static for now)
-        findViewById<TextView>(R.id.tvTotalRevenue).text = "$ 12,450.00"
-        findViewById<TextView>(R.id.tvTotalTransactions).text = "156 Transactions"
-        findViewById<TextView>(R.id.tvInventoryValue).text = "$ 45,200.00"
-        findViewById<TextView>(R.id.tvLowStockCount).text = "5 Low Stock Items"
+        // Default summary values
+        findViewById<TextView>(R.id.tvTotalRevenue).text = "Ksh 0.00"
+        findViewById<TextView>(R.id.tvTotalTransactions).text = "0 Transactions"
+        findViewById<TextView>(R.id.tvInventoryValue).text = "Ksh 0.00"
+        findViewById<TextView>(R.id.tvLowStockCount).text = "0 Low Stock Items"
 
         val prefs = getSharedPreferences("sales_prefs", MODE_PRIVATE)
         val json = prefs.getString("report_products_list", null)
@@ -102,8 +172,10 @@ class ReportsActivity : AppCompatActivity() {
             .setPositiveButton("Add") { _, _ ->
                 val name = etName.text.toString()
                 if (name.isNotEmpty()) {
-                    topProducts.add(0, Product(System.currentTimeMillis().toString(), name, "Reported", 0.0, 0))
+                    val newProduct = Product(System.currentTimeMillis().toString(), name, "Reported", 0.0, 0)
+                    topProducts.add(0, newProduct)
                     topProductsAdapter.updateList(topProducts)
+                    saveReportProductToFirestore(newProduct)
                     saveReportProducts()
                     Toast.makeText(this, "Report item added", Toast.LENGTH_SHORT).show()
                 }
@@ -141,17 +213,20 @@ class ReportsActivity : AppCompatActivity() {
             .setPositiveButton("Update") { _, _ ->
                 val index = topProducts.indexOf(product)
                 if (index != -1) {
-                    topProducts[index] = product.copy(
+                    val updatedProduct = product.copy(
                         name = etName.text.toString(),
                         category = etCategory.text.toString(),
                         price = etPrice.text.toString().toDoubleOrNull() ?: 0.0,
                         stock = etStock.text.toString().toIntOrNull() ?: 0
                     )
+                    topProducts[index] = updatedProduct
                     topProductsAdapter.updateList(topProducts)
+                    saveReportProductToFirestore(updatedProduct)
                     saveReportProducts()
                 }
             }
             .setNeutralButton("Delete") { _, _ ->
+                deleteReportProductFromFirestore(product.id)
                 topProducts.remove(product)
                 topProductsAdapter.updateList(topProducts)
                 saveReportProducts()
@@ -174,7 +249,8 @@ class ReportsActivity : AppCompatActivity() {
         if (itemId == R.id.nav_reports) return true
 
         return when (itemId) {
-            R.id.nav_home -> { navigateTo(Transactionscreen::class.java); true }
+            R.id.nav_home -> { navigateTo(HomeActivity::class.java); true }
+            R.id.nav_sales -> { navigateTo(Transactionscreen::class.java); true }
             R.id.nav_inventory -> { navigateTo(InventoryActivity::class.java); true }
             R.id.nav_customers -> { navigateTo(CustomersActivity::class.java); true }
             else -> false

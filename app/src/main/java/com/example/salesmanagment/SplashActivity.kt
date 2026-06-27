@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.google.firebase.auth.FirebaseAuth
 
 class SplashActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -21,10 +22,19 @@ class SplashActivity : AppCompatActivity() {
             insets
         }
 
-        // Delay for 3 seconds and then start Loginscreen
+        // Check if user is already logged in (Firebase persists sessions offline)
+        val currentUser = FirebaseAuth.getInstance().currentUser
+
+        // Delay for 2 seconds and then decide where to go
         Handler(Looper.getMainLooper()).postDelayed({
-            startActivity(Intent(this, Loginscreen::class.java))
+            if (currentUser != null) {
+                // User is already authenticated (session exists locally)
+                startActivity(Intent(this, HomeActivity::class.java))
+            } else {
+                // No session found, go to Login
+                startActivity(Intent(this, Loginscreen::class.java))
+            }
             finish()
-        }, 3000)
+        }, 2000)
     }
 }
