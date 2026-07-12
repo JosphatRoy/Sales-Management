@@ -47,7 +47,7 @@ This project was developed as part of an Android Mobile Application Development 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/sales-management-app.git
+git clone https://github.com/JosphatRoy/sales-management-app.git
 ```
 
 2. Open Android Studio.
@@ -143,17 +143,6 @@ Android Studio debugging tools were used, including:
 
 ---
 
-## Screenshots
-
-Include screenshots of:
-
-- Home Screen
-- Add Sale Screen
-- Sales List
-- Edit Sale Screen
-- Delete Confirmation
-- Unit Test Results
-- Debugging Process
 
 ---
 
